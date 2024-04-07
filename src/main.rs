@@ -70,6 +70,22 @@ impl fmt::Display for Instruction {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Instructions(Vec<Instruction>);
+
+impl fmt::Display for Instructions {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let last_idx = self.0.len() - 1;
+        for inst in &self.0[..last_idx] {
+            write!(f, "{inst}\n")?;
+        }
+        let last = &self.0[last_idx];
+        write!(f, "{last}")?;
+        Ok(())
+    }
+}
+
+
 /// Check if all bits in mask are set to 1.
 fn check_bitset(bits: u8, mask: u8) -> bool {
     bits & mask == mask
@@ -141,18 +157,32 @@ fn decode_instruction(buf: &[u8]) -> Result<Instruction> {
     instruction
 }
 
-fn decode_instructions(buf: &[u8]) -> Result<Vec<Instruction>> {
+fn decode_instructions(buf: &[u8]) -> Result<Instructions> {
     let n_instructions = buf.len() / 2;
     let mut instructions = Vec::with_capacity(n_instructions);
     for i in 0..n_instructions {
-        let inst_buf = &buf[i..i+2];
+        let inst_buf = &buf[i*2..i*2+2];
         let instruction = decode_instruction(inst_buf)?;
         instructions.push(instruction);
     }
-    Ok(instructions)
+    Ok(Instructions(instructions))
 }
 
-fn main() {
+fn main() -> Result<()> {
+    use std::env;
+    use std::fs::File;
+    use std::io::Read;
+    let args: Vec<String> = env::args().collect();
+    assert!(args.len() == 2, "expect 2 args, got: {args:?}");
+    let bin_path = &args[1];
+    let mut file = File::open(bin_path)?;
+    let mut buf: Vec<u8> = Vec::with_capacity(1000);
+    file.read_to_end(&mut buf)?;
+    let instructions = decode_instructions(&buf)?;
+    println!("bits 16");
+    println!("{}", instructions);
+    Ok(())
+
     // Decode file
 }
 
@@ -171,17 +201,19 @@ mod tests {
         let listing37 = [0b1000_1001, 0b1101_1001];
         let instructions = decode_instructions(&listing37).unwrap();
         check_debug(&instructions, expect![[r#"
-            [
-                Mov {
-                    w: true,
-                    d: false,
-                    mode: RegDisplacement0,
-                    reg: BX,
-                    rw: CX,
-                },
-            ]"#]]);
+            Instructions(
+                [
+                    Mov {
+                        w: true,
+                        d: false,
+                        mode: RegDisplacement0,
+                        reg: BX,
+                        rw: CX,
+                    },
+                ],
+            )"#]]);
         assert_eq!(
-            instructions.iter().map(|i| i.to_string()).collect::<Vec<_>>().join("\n"),
+            instructions.to_string(),
             "mov cx, bx"
         )
     }
