@@ -19,6 +19,11 @@
       packages = with pkgs; [
         nasm
       ];
+      shellHook = ''
+        w() {
+          cargo watch -x test
+        }
+      '';
     };
   };
 }
