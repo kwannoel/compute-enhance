@@ -23,6 +23,9 @@
         w() {
           cargo watch -x test
         }
+        rb() {
+          xxd -b "$@"
+        }
       '';
     };
   };
