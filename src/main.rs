@@ -34,7 +34,7 @@ pub enum Mode {
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
-    Mov { w: bool, d: bool, mode: Mode, reg: Reg, rw: Reg }
+    Mov { w: bool, d: bool, mode: Mode, reg: Reg, rm: Reg }
 }
 
 #[derive(Clone, Debug)]
@@ -54,12 +54,12 @@ impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let op: InstructionName = self.into();
         let (src, dest) = match self {
-            Instruction::Mov { reg, rw, d, .. } => {
+            Instruction::Mov { reg, rm, d, .. } => {
                match d {
                    // reg is src
-                   false => (reg, rw),
+                   false => (reg, rm),
                    // reg is dest
-                   true => (rw, reg)
+                   true => (rm, reg)
                }
             }
         };
@@ -120,16 +120,15 @@ fn decode_reg(bits: u8, w: bool) -> Result<Reg> {
 
 fn decode_instruction(buf: &[u8]) -> Result<Instruction> {
     debug_assert_eq!(buf.len(), 2);
-    const OPCODE_MASK: u8 = 0b1111_1100;
     const D_MASK: u8 = 0b0000_0010;
     const W_MASK: u8 = 0b0000_0001;
     const MOD_MASK: u8 = 0b1100_0000;
     const REG_MASK: u8 = 0b0011_1000;
-    const RW_MASK: u8 = 0b0000_0111;
+    const RM_MASK: u8 = 0b0000_0111;
     let b1 = buf[0];
     let b2 = buf[1];
-    let instruction = match b1 & OPCODE_MASK {
-        0b1000_1000 => {
+    let instruction = match b1 >> 2 {
+        0b0010_0010 => {
             let d = check_bitset(b1, D_MASK);
             let w = check_bitset(b1, W_MASK);
             let mode = match b2 & MOD_MASK {
@@ -142,13 +141,13 @@ fn decode_instruction(buf: &[u8]) -> Result<Instruction> {
                 }
             };
             let reg = decode_reg((b2 & REG_MASK) >> 3, w)?;
-            let rw = decode_reg(b2 & RW_MASK, w)?;
+            let rm = decode_reg(b2 & RM_MASK, w)?;
             Ok(Instruction::Mov {
                 w,
                 d,
                 mode,
                 reg,
-                rw,
+                rm,
             })
         }
         unsupported_opcode => bail!("invalid opcode encoding: {unsupported_opcode:b}")
@@ -208,7 +207,7 @@ mod tests {
                         d: false,
                         mode: RegDisplacement0,
                         reg: BX,
-                        rw: CX,
+                        rm: CX,
                     },
                 ],
             )"#]]);
