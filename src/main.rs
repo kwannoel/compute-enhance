@@ -128,8 +128,7 @@ fn decode_rm(w: u8, buf: &[u8]) -> Result<Reg> {
 
 // type DispLo = u8;
 // type DispHi = u8;
-/// Decode 2nd byte of mov rm reg.
-fn decode_mov_rm_reg_b2(d: u8, w: u8, buf: &[u8]) -> Result<(Instruction, Size)> {
+fn decode_mov_rm_reg(d: u8, w: u8, buf: &[u8]) -> Result<(Instruction, Size)> {
     let b2 = buf[0];
     const REG_MASK: u8 = 0b0011_1000;
 
@@ -156,10 +155,10 @@ fn decode_instruction(buf: &[u8]) -> Result<(Instruction, Size)> {
     let buf = &buf[1..];
     let instruction = match b1 {
         // MOV r/m reg
-        0b10_001000 => decode_mov_rm_reg_b2(0, 0, buf)?,
-        0b10_001001 => decode_mov_rm_reg_b2(0, 1, buf)?,
-        0b10_001010 => decode_mov_rm_reg_b2(1, 0, buf)?,
-        0b10_001011 => decode_mov_rm_reg_b2(0, 1, buf)?,
+        0b10_001000 => decode_mov_rm_reg(0, 0, buf)?,
+        0b10_001001 => decode_mov_rm_reg(0, 1, buf)?,
+        0b10_001010 => decode_mov_rm_reg(1, 0, buf)?,
+        0b10_001011 => decode_mov_rm_reg(0, 1, buf)?,
         unsupported_opcode => bail!("invalid opcode encoding: {unsupported_opcode:b}"), // Mov
     };
     Ok(instruction)
