@@ -128,18 +128,16 @@ fn decode_reg(w: u8, bits: u8) -> Result<Reg> {
 
 fn decode_rm(w: u8, buf: &[u8]) -> Result<Arg> {
     let b2 = buf[0];
-    const MOD_MASK: u8 = 0b1100_0000;
-    let _mode = match b2 & MOD_MASK {
-        0b0000_0000 => Mode::MemDisplacement0,
-        0b0100_0000 => Mode::MemDisplacement8,
-        0b1000_0000 => Mode::MemDisplacement16,
-        0b1100_0000 => Mode::RegDisplacement0,
+    let rm = match b2 >> 6 {
+        // 0b0000_0000 => Mode::MemDisplacement0,
+        // 0b0000_0001 => Mode::MemDisplacement8,
+        // 0b0000_0010 => Mode::MemDisplacement16,
+        0b0000_0011 => Arg::Reg(decode_reg(w, b2)?),
         e => {
             bail!("invalid mode encoding: {e:b}")
         }
     };
-    let reg = decode_reg(w, b2)?;
-    Ok(Arg::Reg(reg))
+    Ok(rm)
 }
 
 // type DispLo = u8;
