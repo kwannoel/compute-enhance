@@ -25,6 +25,11 @@ pub enum Reg {
 }
 
 #[derive(Clone, Debug)]
+pub enum Arg {
+    Reg(Reg),
+}
+
+#[derive(Clone, Debug)]
 pub enum Mode {
     MemDisplacement0,
     MemDisplacement8,
@@ -34,7 +39,7 @@ pub enum Mode {
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
-    Mov { src: Reg, dest: Reg },
+    Mov { src: Arg, dest: Arg },
 }
 
 #[derive(Clone, Debug)]
@@ -50,6 +55,15 @@ impl From<&Instruction> for InstructionName {
     }
 }
 
+impl fmt::Display for Arg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            Self::Reg(r) => format!("{:?}", r).to_lowercase(),
+        };
+        write!(f, "{s}")
+    }
+}
+
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let op: InstructionName = self.into();
@@ -57,8 +71,8 @@ impl fmt::Display for Instruction {
             Instruction::Mov { src, dest } => (src, dest),
         };
         let op_str = format!("{:?}", op).to_lowercase();
-        let src_str = format!("{:?}", src).to_lowercase();
-        let dest_str = format!("{:?}", dest).to_lowercase();
+        let src_str = format!("{}", src);
+        let dest_str = format!("{}", dest);
         write!(f, "{op_str} {dest_str}, {src_str}")
     }
 }
@@ -110,7 +124,7 @@ fn decode_reg(w: u8, bits: u8) -> Result<Reg> {
 //   MOV
 // -------
 
-fn decode_rm(w: u8, buf: &[u8]) -> Result<Reg> {
+fn decode_rm(w: u8, buf: &[u8]) -> Result<Arg> {
     let b2 = buf[0];
     const MOD_MASK: u8 = 0b1100_0000;
     const RM_MASK: u8 = 0b0000_0111;
@@ -123,7 +137,8 @@ fn decode_rm(w: u8, buf: &[u8]) -> Result<Reg> {
             bail!("invalid mode encoding: {e:b}")
         }
     };
-    decode_reg(w, b2 & RM_MASK)
+    let reg = decode_reg(w, b2 & RM_MASK)?;
+    Ok(Arg::Reg(reg))
 }
 
 // type DispLo = u8;
@@ -133,7 +148,7 @@ fn decode_mov_rm_reg(d: u8, w: u8, buf: &[u8]) -> Result<(Instruction, Size)> {
     const REG_MASK: u8 = 0b0011_1000;
 
     // Always decode reg field as register.
-    let reg = decode_reg(w, (b2 & REG_MASK) >> 3)?;
+    let reg = Arg::Reg(decode_reg(w, (b2 & REG_MASK) >> 3)?);
 
     // Decode rm depends on mode.
     let rm = decode_rm(w, buf)?;
@@ -203,7 +218,7 @@ mod tests {
     use std::fmt::Debug;
 
     fn check_debug(actual: impl Debug, expect: Expect) {
-        expect.assert_eq(&format!("{:#?}", actual));
+        expect.assert_eq(&format!("{:?}", actual));
     }
 
     #[test]
@@ -212,15 +227,7 @@ mod tests {
         let instructions = decode_instructions(&listing37).unwrap();
         check_debug(
             &instructions,
-            expect![[r#"
-                Instructions(
-                    [
-                        Mov {
-                            src: BX,
-                            dest: CX,
-                        },
-                    ],
-                )"#]],
+            expect!["Instructions([Mov { src: Reg(BX), dest: Reg(CX) }])"],
         );
         assert_eq!(instructions.to_string(), "mov cx, bx")
     }
@@ -255,55 +262,7 @@ mod tests {
         let instructions = decode_instructions(&listing38).unwrap();
         check_debug(
             &instructions,
-            expect![[r#"
-                Instructions(
-                    [
-                        Mov {
-                            src: BX,
-                            dest: CX,
-                        },
-                        Mov {
-                            src: AH,
-                            dest: CH,
-                        },
-                        Mov {
-                            src: BX,
-                            dest: DX,
-                        },
-                        Mov {
-                            src: BX,
-                            dest: SI,
-                        },
-                        Mov {
-                            src: DI,
-                            dest: BX,
-                        },
-                        Mov {
-                            src: CL,
-                            dest: AL,
-                        },
-                        Mov {
-                            src: CH,
-                            dest: CH,
-                        },
-                        Mov {
-                            src: AX,
-                            dest: BX,
-                        },
-                        Mov {
-                            src: SI,
-                            dest: BX,
-                        },
-                        Mov {
-                            src: DI,
-                            dest: SP,
-                        },
-                        Mov {
-                            src: AX,
-                            dest: BP,
-                        },
-                    ],
-                )"#]],
+            expect!["Instructions([Mov { src: Reg(BX), dest: Reg(CX) }, Mov { src: Reg(AH), dest: Reg(CH) }, Mov { src: Reg(BX), dest: Reg(DX) }, Mov { src: Reg(BX), dest: Reg(SI) }, Mov { src: Reg(DI), dest: Reg(BX) }, Mov { src: Reg(CL), dest: Reg(AL) }, Mov { src: Reg(CH), dest: Reg(CH) }, Mov { src: Reg(AX), dest: Reg(BX) }, Mov { src: Reg(SI), dest: Reg(BX) }, Mov { src: Reg(DI), dest: Reg(SP) }, Mov { src: Reg(AX), dest: Reg(BP) }])"],
         );
         assert_eq!(
             instructions.to_string(),
