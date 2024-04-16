@@ -94,6 +94,8 @@ impl fmt::Display for Instructions {
 
 fn decode_reg(w: u8, bits: u8) -> Result<Reg> {
     use crate::Reg::*;
+    const REG_MASK: u8 = 0b0000_0111;
+    let bits = bits & REG_MASK;
     match (bits, w) {
         // Decode BYTE (u8)
         (0b0000_0000, 0) => Ok(AL),
@@ -127,7 +129,6 @@ fn decode_reg(w: u8, bits: u8) -> Result<Reg> {
 fn decode_rm(w: u8, buf: &[u8]) -> Result<Arg> {
     let b2 = buf[0];
     const MOD_MASK: u8 = 0b1100_0000;
-    const RM_MASK: u8 = 0b0000_0111;
     let _mode = match b2 & MOD_MASK {
         0b0000_0000 => Mode::MemDisplacement0,
         0b0100_0000 => Mode::MemDisplacement8,
@@ -137,7 +138,7 @@ fn decode_rm(w: u8, buf: &[u8]) -> Result<Arg> {
             bail!("invalid mode encoding: {e:b}")
         }
     };
-    let reg = decode_reg(w, b2 & RM_MASK)?;
+    let reg = decode_reg(w, b2)?;
     Ok(Arg::Reg(reg))
 }
 
@@ -145,10 +146,8 @@ fn decode_rm(w: u8, buf: &[u8]) -> Result<Arg> {
 // type DispHi = u8;
 fn decode_mov_rm_reg(d: u8, w: u8, buf: &[u8]) -> Result<(Instruction, Size)> {
     let b2 = buf[0];
-    const REG_MASK: u8 = 0b0011_1000;
-
     // Always decode reg field as register.
-    let reg = Arg::Reg(decode_reg(w, (b2 & REG_MASK) >> 3)?);
+    let reg = Arg::Reg(decode_reg(w, b2 >> 3)?);
 
     // Decode rm depends on mode.
     let rm = decode_rm(w, buf)?;
