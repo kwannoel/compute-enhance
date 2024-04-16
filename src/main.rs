@@ -2,6 +2,19 @@ use anyhow::{bail, Result};
 use std::fmt;
 
 #[derive(Clone, Debug)]
+pub enum MemReg {
+    Two((Reg, Reg)),
+    One(Reg),
+    Zero,
+}
+
+#[derive(Clone, Debug)]
+pub struct Mem {
+    regs: MemReg,
+    displacement: u16,
+}
+
+#[derive(Clone, Debug)]
 pub enum Reg {
     // W = 0
     AL,
@@ -27,6 +40,7 @@ pub enum Reg {
 #[derive(Clone, Debug)]
 pub enum Arg {
     Reg(Reg),
+    Mem(Mem),
 }
 
 #[derive(Clone, Debug)]
@@ -55,10 +69,47 @@ impl From<&Instruction> for InstructionName {
     }
 }
 
+
+impl fmt::Display for Reg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = format!("{:?}", self).to_lowercase();
+        write!(f, "{s}")
+    }
+}
+
+impl fmt::Display for MemReg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use crate::MemReg::*;
+        let s = match self {
+            Two((r1, r2)) => format!("{r1} + {r2}"),
+            One(r1) => r1.to_string(),
+            Zero => "".to_string(),
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl fmt::Display for Mem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Self {
+            regs,
+            displacement,
+        } = self;
+        let s = regs.to_string();
+        let d = displacement.to_string();
+        let sd = match s.as_str() {
+            "" => d,
+            _ => format!("{s} + {d}")
+        };
+        write!(f, "[{s}]")
+    }
+}
+
 impl fmt::Display for Arg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
             Self::Reg(r) => format!("{:?}", r).to_lowercase(),
+            Self::Mem(m) => m.to_string(),
         };
         write!(f, "{s}")
     }
@@ -126,10 +177,14 @@ fn decode_reg(w: u8, bits: u8) -> Result<Reg> {
 //   MOV
 // -------
 
+fn decode_rm_0(buf: &[u8]) -> Result<Mem> {
+    todo!()
+}
+
 fn decode_rm(w: u8, buf: &[u8]) -> Result<Arg> {
     let b2 = buf[0];
     let rm = match b2 >> 6 {
-        // 0b0000_0000 => Mode::MemDisplacement0,
+        0b0000_0000 => Arg::Mem(decode_rm_0(buf)?),
         // 0b0000_0001 => Mode::MemDisplacement8,
         // 0b0000_0010 => Mode::MemDisplacement16,
         0b0000_0011 => Arg::Reg(decode_reg(w, b2)?),

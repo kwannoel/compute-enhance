@@ -33,3 +33,6 @@ mov al, [bx + si + 4999]
 mov [bx + di], cx
 mov [bp + si], cl
 mov [bp], ch
+
+// TODO:
+// handle case of [0], [bx + 0]
