@@ -35,11 +35,8 @@ pub enum Mode {
 #[derive(Clone, Debug)]
 pub enum Instruction {
     Mov {
-        w: bool,
-        d: bool,
-        mode: Mode,
-        reg: Reg,
-        rm: Reg,
+        src: Reg,
+        dest: Reg,
     },
 }
 
@@ -60,14 +57,7 @@ impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let op: InstructionName = self.into();
         let (src, dest) = match self {
-            Instruction::Mov { reg, rm, d, .. } => {
-                match d {
-                    // reg is src
-                    false => (reg, rm),
-                    // reg is dest
-                    true => (rm, reg),
-                }
-            }
+            Instruction::Mov { src, dest } => (src, dest)
         };
         let op_str = format!("{:?}", op).to_lowercase();
         let src_str = format!("{:?}", src).to_lowercase();
@@ -130,7 +120,7 @@ fn decode_mov_rm_reg_b2(d: bool, w: bool, buf: &[u8]) -> Result<(Instruction, Si
     const MOD_MASK: u8 = 0b1100_0000;
     const REG_MASK: u8 = 0b0011_1000;
     const RM_MASK: u8 = 0b0000_0111;
-    let mode = match b2 & MOD_MASK {
+    let _mode = match b2 & MOD_MASK {
         0b0000_0000 => Mode::MemDisplacement0,
         0b0100_0000 => Mode::MemDisplacement8,
         0b1000_0000 => Mode::MemDisplacement16,
@@ -141,13 +131,14 @@ fn decode_mov_rm_reg_b2(d: bool, w: bool, buf: &[u8]) -> Result<(Instruction, Si
     };
     let reg = decode_reg((b2 & REG_MASK) >> 3, w)?;
     let rm = decode_reg(b2 & RM_MASK, w)?;
+    let (src, dest) = if d {
+        (rm, reg)
+    } else {
+        (reg, rm)
+    };
     Ok((
         Instruction::Mov {
-            w,
-            d,
-            mode,
-            reg,
-            rm,
+            src, dest
         },
         2,
     ))
@@ -220,17 +211,14 @@ mod tests {
         check_debug(
             &instructions,
             expect![[r#"
-            Instructions(
-                [
-                    Mov {
-                        w: true,
-                        d: false,
-                        mode: RegDisplacement0,
-                        reg: BX,
-                        rm: CX,
-                    },
-                ],
-            )"#]],
+                Instructions(
+                    [
+                        Mov {
+                            src: BX,
+                            dest: CX,
+                        },
+                    ],
+                )"#]],
         );
         assert_eq!(instructions.to_string(), "mov cx, bx")
     }
@@ -253,81 +241,48 @@ mod tests {
                 Instructions(
                     [
                         Mov {
-                            w: true,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: BX,
-                            rm: CX,
+                            src: BX,
+                            dest: CX,
                         },
                         Mov {
-                            w: false,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: AH,
-                            rm: CH,
+                            src: AH,
+                            dest: CH,
                         },
                         Mov {
-                            w: true,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: BX,
-                            rm: DX,
+                            src: BX,
+                            dest: DX,
                         },
                         Mov {
-                            w: true,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: BX,
-                            rm: SI,
+                            src: BX,
+                            dest: SI,
                         },
                         Mov {
-                            w: true,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: DI,
-                            rm: BX,
+                            src: DI,
+                            dest: BX,
                         },
                         Mov {
-                            w: false,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: CL,
-                            rm: AL,
+                            src: CL,
+                            dest: AL,
                         },
                         Mov {
-                            w: false,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: CH,
-                            rm: CH,
+                            src: CH,
+                            dest: CH,
                         },
                         Mov {
-                            w: true,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: AX,
-                            rm: BX,
+                            src: AX,
+                            dest: BX,
                         },
                         Mov {
-                            w: true,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: SI,
-                            rm: BX,
+                            src: SI,
+                            dest: BX,
                         },
                         Mov {
-                            w: true,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: DI,
-                            rm: SP,
+                            src: DI,
+                            dest: SP,
                         },
                         Mov {
-                            w: true,
-                            d: false,
-                            mode: RegDisplacement0,
-                            reg: AX,
-                            rm: BP,
+                            src: AX,
+                            dest: BP,
                         },
                     ],
                 )"#]],
