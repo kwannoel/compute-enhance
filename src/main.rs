@@ -81,27 +81,28 @@ impl fmt::Display for Instructions {
     }
 }
 
-fn decode_reg(bits: u8, w: bool) -> Result<Reg> {
+fn decode_reg(bits: u8, w: u8) -> Result<Reg> {
     use crate::Reg::*;
     match (bits, w) {
-        // W = 0
-        (0b0000_0000, false) => Ok(AL),
-        (0b0000_0001, false) => Ok(CL),
-        (0b0000_0010, false) => Ok(DL),
-        (0b0000_0011, false) => Ok(BL),
-        (0b0000_0100, false) => Ok(AH),
-        (0b0000_0101, false) => Ok(CH),
-        (0b0000_0110, false) => Ok(DH),
-        (0b0000_0111, false) => Ok(BH),
-        // W = 1
-        (0b0000_0000, true) => Ok(AX),
-        (0b0000_0001, true) => Ok(CX),
-        (0b0000_0010, true) => Ok(DX),
-        (0b0000_0011, true) => Ok(BX),
-        (0b0000_0100, true) => Ok(SP),
-        (0b0000_0101, true) => Ok(BP),
-        (0b0000_0110, true) => Ok(SI),
-        (0b0000_0111, true) => Ok(DI),
+        // Decode BYTE (u8)
+        (0b0000_0000, 0) => Ok(AL),
+        (0b0000_0001, 0) => Ok(CL),
+        (0b0000_0010, 0) => Ok(DL),
+        (0b0000_0011, 0) => Ok(BL),
+        (0b0000_0100, 0) => Ok(AH),
+        (0b0000_0101, 0) => Ok(CH),
+        (0b0000_0110, 0) => Ok(DH),
+        (0b0000_0111, 0) => Ok(BH),
+
+        // Decode WORD (u8 u8)
+        (0b0000_0000, 1) => Ok(AX),
+        (0b0000_0001, 1) => Ok(CX),
+        (0b0000_0010, 1) => Ok(DX),
+        (0b0000_0011, 1) => Ok(BX),
+        (0b0000_0100, 1) => Ok(SP),
+        (0b0000_0101, 1) => Ok(BP),
+        (0b0000_0110, 1) => Ok(SI),
+        (0b0000_0111, 1) => Ok(DI),
         _ => {
             bail!("invalid reg encoding: {bits:b}")
         }
@@ -115,7 +116,7 @@ fn decode_reg(bits: u8, w: bool) -> Result<Reg> {
 // type DispLo = u8;
 // type DispHi = u8;
 /// Decode 2nd byte of mov rm reg.
-fn decode_mov_rm_reg_b2(d: bool, w: bool, buf: &[u8]) -> Result<(Instruction, Size)> {
+fn decode_mov_rm_reg_b2(d: u8, w: u8, buf: &[u8]) -> Result<(Instruction, Size)> {
     let b2 = buf[0];
     const MOD_MASK: u8 = 0b1100_0000;
     const REG_MASK: u8 = 0b0011_1000;
@@ -131,10 +132,10 @@ fn decode_mov_rm_reg_b2(d: bool, w: bool, buf: &[u8]) -> Result<(Instruction, Si
     };
     let reg = decode_reg((b2 & REG_MASK) >> 3, w)?;
     let rm = decode_reg(b2 & RM_MASK, w)?;
-    let (src, dest) = if d {
-        (rm, reg)
-    } else {
-        (reg, rm)
+    let (src, dest) = match d {
+        0 => (reg, rm),
+        1 => (rm, reg),
+        _ => unreachable!(),
     };
     Ok((
         Instruction::Mov {
@@ -153,10 +154,10 @@ fn decode_instruction(buf: &[u8]) -> Result<(Instruction, Size)> {
     let buf = &buf[1..];
     let instruction = match b1 {
         // MOV r/m reg
-        0b10_001000 => decode_mov_rm_reg_b2(false, false, buf)?,
-        0b10_001001 => decode_mov_rm_reg_b2(false, true, buf)?,
-        0b10_001010 => decode_mov_rm_reg_b2(true, false, buf)?,
-        0b10_001011 => decode_mov_rm_reg_b2(true, true, buf)?,
+        0b10_001000 => decode_mov_rm_reg_b2(0, 0, buf)?,
+        0b10_001001 => decode_mov_rm_reg_b2(0, 1, buf)?,
+        0b10_001010 => decode_mov_rm_reg_b2(1, 0, buf)?,
+        0b10_001011 => decode_mov_rm_reg_b2(0, 1, buf)?,
         unsupported_opcode => bail!("invalid opcode encoding: {unsupported_opcode:b}"), // Mov
     };
     Ok(instruction)
