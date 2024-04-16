@@ -91,11 +91,6 @@ impl fmt::Display for Instructions {
     }
 }
 
-/// Check if all bits in mask are set to 1.
-fn check_bitset(bits: u8, mask: u8) -> bool {
-    bits & mask == mask
-}
-
 fn decode_reg(bits: u8, w: bool) -> Result<Reg> {
     use crate::Reg::*;
     match (bits, w) {
@@ -127,7 +122,6 @@ fn decode_reg(bits: u8, w: bool) -> Result<Reg> {
 //   MOV
 // -------
 
-type RM = Reg;
 // type DispLo = u8;
 // type DispHi = u8;
 /// Decode 2nd byte of mov rm reg.
@@ -163,9 +157,6 @@ type Size = usize;
 
 fn decode_instruction(buf: &[u8]) -> Result<(Instruction, Size)> {
     debug_assert!(!buf.is_empty());
-
-    const D_MASK: u8 = 0b0000_0010;
-    const W_MASK: u8 = 0b0000_0001;
 
     let b1 = buf[0];
     let buf = &buf[1..];
@@ -242,5 +233,116 @@ mod tests {
             )"#]],
         );
         assert_eq!(instructions.to_string(), "mov cx, bx")
+    }
+
+    #[test]
+    fn test_38_decode() {
+        let listing38 = [
+            0b1000_1001, 0b1101_1001, 0b1000_1000, 0b1110_0101,
+            0b1000_1001, 0b1101_1010, 0b1000_1001, 0b1101_1110,
+            0b1000_1001, 0b1111_1011, 0b1000_1000, 0b1100_1000,
+            0b1000_1000, 0b1110_1101, 0b1000_1001, 0b1100_0011,
+            0b1000_1001, 0b1111_0011, 0b1000_1001, 0b1111_1100,
+            0b1000_1001, 0b1100_0101
+        ];
+
+        let instructions = decode_instructions(&listing38).unwrap();
+        check_debug(
+            &instructions,
+            expect![[r#"
+                Instructions(
+                    [
+                        Mov {
+                            w: true,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: BX,
+                            rm: CX,
+                        },
+                        Mov {
+                            w: false,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: AH,
+                            rm: CH,
+                        },
+                        Mov {
+                            w: true,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: BX,
+                            rm: DX,
+                        },
+                        Mov {
+                            w: true,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: BX,
+                            rm: SI,
+                        },
+                        Mov {
+                            w: true,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: DI,
+                            rm: BX,
+                        },
+                        Mov {
+                            w: false,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: CL,
+                            rm: AL,
+                        },
+                        Mov {
+                            w: false,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: CH,
+                            rm: CH,
+                        },
+                        Mov {
+                            w: true,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: AX,
+                            rm: BX,
+                        },
+                        Mov {
+                            w: true,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: SI,
+                            rm: BX,
+                        },
+                        Mov {
+                            w: true,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: DI,
+                            rm: SP,
+                        },
+                        Mov {
+                            w: true,
+                            d: false,
+                            mode: RegDisplacement0,
+                            reg: AX,
+                            rm: BP,
+                        },
+                    ],
+                )"#]],
+        );
+        assert_eq!(instructions.to_string(),
+                   "mov cx, bx
+mov ch, ah
+mov dx, bx
+mov si, bx
+mov bx, di
+mov al, cl
+mov ch, ch
+mov bx, ax
+mov bx, si
+mov sp, di
+mov bp, ax")
     }
 }
