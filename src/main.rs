@@ -34,10 +34,7 @@ pub enum Mode {
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
-    Mov {
-        src: Reg,
-        dest: Reg,
-    },
+    Mov { src: Reg, dest: Reg },
 }
 
 #[derive(Clone, Debug)]
@@ -57,7 +54,7 @@ impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let op: InstructionName = self.into();
         let (src, dest) = match self {
-            Instruction::Mov { src, dest } => (src, dest)
+            Instruction::Mov { src, dest } => (src, dest),
         };
         let op_str = format!("{:?}", op).to_lowercase();
         let src_str = format!("{:?}", src).to_lowercase();
@@ -147,12 +144,7 @@ fn decode_mov_rm_reg_b2(d: u8, w: u8, buf: &[u8]) -> Result<(Instruction, Size)>
         1 => (rm, reg),
         _ => unreachable!(),
     };
-    Ok((
-        Instruction::Mov {
-            src, dest
-        },
-        2,
-    ))
+    Ok((Instruction::Mov { src, dest }, 2))
 }
 
 type Size = usize;
@@ -237,12 +229,28 @@ mod tests {
     #[test]
     fn test_38_decode() {
         let listing38 = [
-            0b1000_1001, 0b1101_1001, 0b1000_1000, 0b1110_0101,
-            0b1000_1001, 0b1101_1010, 0b1000_1001, 0b1101_1110,
-            0b1000_1001, 0b1111_1011, 0b1000_1000, 0b1100_1000,
-            0b1000_1000, 0b1110_1101, 0b1000_1001, 0b1100_0011,
-            0b1000_1001, 0b1111_0011, 0b1000_1001, 0b1111_1100,
-            0b1000_1001, 0b1100_0101
+            0b1000_1001,
+            0b1101_1001,
+            0b1000_1000,
+            0b1110_0101,
+            0b1000_1001,
+            0b1101_1010,
+            0b1000_1001,
+            0b1101_1110,
+            0b1000_1001,
+            0b1111_1011,
+            0b1000_1000,
+            0b1100_1000,
+            0b1000_1000,
+            0b1110_1101,
+            0b1000_1001,
+            0b1100_0011,
+            0b1000_1001,
+            0b1111_0011,
+            0b1000_1001,
+            0b1111_1100,
+            0b1000_1001,
+            0b1100_0101,
         ];
 
         let instructions = decode_instructions(&listing38).unwrap();
@@ -298,8 +306,9 @@ mod tests {
                     ],
                 )"#]],
         );
-        assert_eq!(instructions.to_string(),
-                   "mov cx, bx
+        assert_eq!(
+            instructions.to_string(),
+            "mov cx, bx
 mov ch, ah
 mov dx, bx
 mov si, bx
@@ -309,6 +318,7 @@ mov ch, ch
 mov bx, ax
 mov bx, si
 mov sp, di
-mov bp, ax")
+mov bp, ax"
+        )
     }
 }
