@@ -1,5 +1,5 @@
-use std::fmt;
 use anyhow::{bail, Result};
+use std::fmt;
 
 #[derive(Clone, Debug)]
 pub enum Reg {
@@ -34,18 +34,24 @@ pub enum Mode {
 
 #[derive(Clone, Debug)]
 pub enum Instruction {
-    Mov { w: bool, d: bool, mode: Mode, reg: Reg, rm: Reg }
+    Mov {
+        w: bool,
+        d: bool,
+        mode: Mode,
+        reg: Reg,
+        rm: Reg,
+    },
 }
 
 #[derive(Clone, Debug)]
 pub enum InstructionName {
-    Mov
+    Mov,
 }
 
 impl From<&Instruction> for InstructionName {
     fn from(inst: &Instruction) -> Self {
         match inst {
-            Instruction::Mov {..} => InstructionName::Mov
+            Instruction::Mov { .. } => InstructionName::Mov,
         }
     }
 }
@@ -55,12 +61,12 @@ impl fmt::Display for Instruction {
         let op: InstructionName = self.into();
         let (src, dest) = match self {
             Instruction::Mov { reg, rm, d, .. } => {
-               match d {
-                   // reg is src
-                   false => (reg, rm),
-                   // reg is dest
-                   true => (rm, reg)
-               }
+                match d {
+                    // reg is src
+                    false => (reg, rm),
+                    // reg is dest
+                    true => (rm, reg),
+                }
             }
         };
         let op_str = format!("{:?}", op).to_lowercase();
@@ -84,7 +90,6 @@ impl fmt::Display for Instructions {
         Ok(())
     }
 }
-
 
 /// Check if all bits in mask are set to 1.
 fn check_bitset(bits: u8, mask: u8) -> bool {
@@ -118,51 +123,73 @@ fn decode_reg(bits: u8, w: bool) -> Result<Reg> {
     }
 }
 
-fn decode_instruction(buf: &[u8]) -> Result<Instruction> {
-    debug_assert_eq!(buf.len(), 2);
-    const D_MASK: u8 = 0b0000_0010;
-    const W_MASK: u8 = 0b0000_0001;
+// -------
+//   MOV
+// -------
+
+type RM = Reg;
+// type DispLo = u8;
+// type DispHi = u8;
+/// Decode 2nd byte of mov rm reg.
+fn decode_mov_rm_reg_b2(d: bool, w: bool, buf: &[u8]) -> Result<(Instruction, Size)> {
+    let b2 = buf[0];
     const MOD_MASK: u8 = 0b1100_0000;
     const REG_MASK: u8 = 0b0011_1000;
     const RM_MASK: u8 = 0b0000_0111;
-    let b1 = buf[0];
-    let b2 = buf[1];
-    let instruction = match b1 >> 2 {
-        0b0010_0010 => {
-            let d = check_bitset(b1, D_MASK);
-            let w = check_bitset(b1, W_MASK);
-            let mode = match b2 & MOD_MASK {
-                0b0000_0000 => Mode::MemDisplacement0,
-                0b0100_0000 => Mode::MemDisplacement8,
-                0b1000_0000 => Mode::MemDisplacement16,
-                0b1100_0000 => Mode::RegDisplacement0,
-                e => {
-                    bail!("invalid mode encoding: {e:b}")
-                }
-            };
-            let reg = decode_reg((b2 & REG_MASK) >> 3, w)?;
-            let rm = decode_reg(b2 & RM_MASK, w)?;
-            Ok(Instruction::Mov {
-                w,
-                d,
-                mode,
-                reg,
-                rm,
-            })
+    let mode = match b2 & MOD_MASK {
+        0b0000_0000 => Mode::MemDisplacement0,
+        0b0100_0000 => Mode::MemDisplacement8,
+        0b1000_0000 => Mode::MemDisplacement16,
+        0b1100_0000 => Mode::RegDisplacement0,
+        e => {
+            bail!("invalid mode encoding: {e:b}")
         }
-        unsupported_opcode => bail!("invalid opcode encoding: {unsupported_opcode:b}")
-        // Mov
     };
-    instruction
+    let reg = decode_reg((b2 & REG_MASK) >> 3, w)?;
+    let rm = decode_reg(b2 & RM_MASK, w)?;
+    Ok((
+        Instruction::Mov {
+            w,
+            d,
+            mode,
+            reg,
+            rm,
+        },
+        2,
+    ))
 }
 
+type Size = usize;
+
+fn decode_instruction(buf: &[u8]) -> Result<(Instruction, Size)> {
+    debug_assert!(!buf.is_empty());
+
+    const D_MASK: u8 = 0b0000_0010;
+    const W_MASK: u8 = 0b0000_0001;
+
+    let b1 = buf[0];
+    let buf = &buf[1..];
+    let instruction = match b1 {
+        // MOV r/m reg
+        0b10_001000 => decode_mov_rm_reg_b2(false, false, buf)?,
+        0b10_001001 => decode_mov_rm_reg_b2(false, true, buf)?,
+        0b10_001010 => decode_mov_rm_reg_b2(true, false, buf)?,
+        0b10_001011 => decode_mov_rm_reg_b2(true, true, buf)?,
+        unsupported_opcode => bail!("invalid opcode encoding: {unsupported_opcode:b}"), // Mov
+    };
+    Ok(instruction)
+}
+
+// TODO: Can we directly increment pointers??
 fn decode_instructions(buf: &[u8]) -> Result<Instructions> {
     let n_instructions = buf.len() / 2;
     let mut instructions = Vec::with_capacity(n_instructions);
-    for i in 0..n_instructions {
-        let inst_buf = &buf[i*2..i*2+2];
-        let instruction = decode_instruction(inst_buf)?;
+    let mut offset = 0;
+    while offset < buf.len() {
+        let inst_buf = &buf[offset..];
+        let (instruction, size) = decode_instruction(inst_buf)?;
         instructions.push(instruction);
+        offset += size;
     }
     Ok(Instructions(instructions))
 }
@@ -199,7 +226,9 @@ mod tests {
     fn test_37_decode() {
         let listing37 = [0b1000_1001, 0b1101_1001];
         let instructions = decode_instructions(&listing37).unwrap();
-        check_debug(&instructions, expect![[r#"
+        check_debug(
+            &instructions,
+            expect![[r#"
             Instructions(
                 [
                     Mov {
@@ -210,10 +239,8 @@ mod tests {
                         rm: CX,
                     },
                 ],
-            )"#]]);
-        assert_eq!(
-            instructions.to_string(),
-            "mov cx, bx"
-        )
+            )"#]],
+        );
+        assert_eq!(instructions.to_string(), "mov cx, bx")
     }
 }
