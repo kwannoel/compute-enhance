@@ -174,6 +174,7 @@ fn decode_reg(w: u8, bits: u8) -> Result<Reg> {
 //   MOV
 // -------
 
+// TODO: Can we directly cast and index a u16 value?
 fn decode_u16(lo: u8, hi: u8) -> u16 {
     let mut result = 0u16;
     result &= lo as u16;
@@ -210,12 +211,24 @@ fn decode_rm_0(buf: &[u8]) -> Result<Mem> {
     Ok(Mem { regs, displacement })
 }
 
+fn decode_rm_1(buf: &[u8]) -> Result<Mem> {
+    let regs = decode_mem_regs(buf)?;
+    let displacement = buf[1] as u16;
+    Ok(Mem { regs, displacement })
+}
+
+fn decode_rm_2(buf: &[u8]) -> Result<Mem> {
+    let regs = decode_mem_regs(buf)?;
+    let displacement = decode_u16(buf[1], buf[2]);
+    Ok(Mem { regs, displacement })
+}
+
 fn decode_rm(w: u8, buf: &[u8]) -> Result<Arg> {
     let b2 = buf[0];
     let rm = match b2 >> 6 {
         0b0000_0000 => Arg::Mem(decode_rm_0(buf)?),
-        // 0b0000_0001 => Mode::MemDisplacement8,
-        // 0b0000_0010 => Mode::MemDisplacement16,
+        0b0000_0001 => Arg::Mem(decode_rm_1(buf)?),
+        0b0000_0010 => Arg::Mem(decode_rm_2(buf)?),
         0b0000_0011 => Arg::Reg(decode_reg(w, b2)?),
         e => {
             bail!("invalid mode encoding: {e:b}")
