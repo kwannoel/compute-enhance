@@ -69,7 +69,6 @@ impl From<&Instruction> for InstructionName {
     }
 }
 
-
 impl fmt::Display for Reg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = format!("{:?}", self).to_lowercase();
@@ -91,17 +90,15 @@ impl fmt::Display for MemReg {
 
 impl fmt::Display for Mem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Self {
-            regs,
-            displacement,
-        } = self;
+        let Self { regs, displacement } = self;
         let s = regs.to_string();
         let d = displacement.to_string();
-        let sd = match s.as_str() {
-            "" => d,
-            _ => format!("{s} + {d}")
+        let sd = match (s.as_str(), d.as_str()) {
+            ("", _) => d,
+            (_, "0") => s,
+            (_, _) => format!("{s} + {d}"),
         };
-        write!(f, "[{s}]")
+        write!(f, "[{sd}]")
     }
 }
 
@@ -177,8 +174,40 @@ fn decode_reg(w: u8, bits: u8) -> Result<Reg> {
 //   MOV
 // -------
 
+fn decode_u16(lo: u8, hi: u8) -> u16 {
+    let mut result = 0u16;
+    result &= lo as u16;
+    result &= (hi as u16) << 8;
+    result
+}
+
+fn decode_mem_regs(buf: &[u8]) -> Result<MemReg> {
+    use crate::MemReg::*;
+    use crate::Reg::*;
+    let r = match buf[0] & 0b0000_0111 {
+        0b0000_0000 => Two((BX, SI)),
+        0b0000_0001 => Two((BX, DI)),
+        0b0000_0010 => Two((BP, SI)),
+        0b0000_0011 => Two((BP, DI)),
+        0b0000_0100 => One(SI),
+        0b0000_0101 => One(DI),
+        0b0000_0110 => One(BP),
+        0b0000_0111 => One(BX),
+        _ => bail!("invalid encoding for rm"),
+    };
+    Ok(r)
+}
+
 fn decode_rm_0(buf: &[u8]) -> Result<Mem> {
-    todo!()
+    use crate::MemReg::*;
+    use crate::Reg::*;
+    let regs = decode_mem_regs(buf)?;
+    let (displacement, regs) = match regs {
+        // 110, DIRECT ADDRESS
+        One(BP) => (decode_u16(buf[1], buf[2]), Zero),
+        _ => (0, regs),
+    };
+    Ok(Mem { regs, displacement })
 }
 
 fn decode_rm(w: u8, buf: &[u8]) -> Result<Arg> {
