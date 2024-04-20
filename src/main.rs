@@ -170,8 +170,8 @@ fn decode_reg(w: u8, bits: u8) -> Result<Reg> {
     }
 }
 
-fn decode_reg_arg(w: u8, bits: u8) -> Result<Arg> {
-    Ok(Arg::Reg(decode_reg(w, bits)?))
+fn decode_reg_arg(w: u8, bits: u8) -> Result<(Size, Arg)> {
+    Ok((1, Arg::Reg(decode_reg(w, bits)?)))
 }
 
 // -------
@@ -203,34 +203,34 @@ fn decode_mem_regs(buf: &[u8]) -> Result<MemReg> {
     Ok(r)
 }
 
-fn decode_rm_0(buf: &[u8]) -> Result<Arg> {
+fn decode_rm_0(buf: &[u8]) -> Result<(Size, Arg)> {
     use crate::MemReg::*;
     use crate::Reg::*;
     let regs = decode_mem_regs(buf)?;
-    let (displacement, regs) = match regs {
+    let (sz, displacement, regs) = match regs {
         // 110, DIRECT ADDRESS
-        One(BP) => (decode_u16(buf[1], buf[2]), Zero),
-        _ => (0, regs),
+        One(BP) => (3, decode_u16(buf[1], buf[2]), Zero),
+        _ => (1, 0, regs),
     };
-    Ok(Arg::Mem(Mem { regs, displacement }))
+    Ok((sz, Arg::Mem(Mem { regs, displacement })))
 }
 
-fn decode_rm_1(buf: &[u8]) -> Result<Arg> {
+fn decode_rm_1(buf: &[u8]) -> Result<(Size, Arg)> {
     let regs = decode_mem_regs(buf)?;
     let displacement = buf[1] as u16;
-    Ok(Arg::Mem(Mem { regs, displacement }))
+    Ok((2, Arg::Mem(Mem { regs, displacement })))
 }
 
-fn decode_rm_2(buf: &[u8]) -> Result<Arg> {
+fn decode_rm_2(buf: &[u8]) -> Result<(Size, Arg)> {
     let regs = decode_mem_regs(buf)?;
     let displacement = decode_u16(buf[1], buf[2]);
-    Ok(Arg::Mem(Mem { regs, displacement }))
+    Ok((3, Arg::Mem(Mem { regs, displacement })))
 }
 
 fn decode_rm(w: u8, buf: &[u8]) -> Result<(Size, Arg)> {
     let b2 = buf[0];
     // FIXME: Ret size
-    let rm = match b2 >> 6 {
+    let sz_rm = match b2 >> 6 {
         0b0000_0000 => decode_rm_0(buf)?,
         0b0000_0001 => decode_rm_1(buf)?,
         0b0000_0010 => decode_rm_2(buf)?,
@@ -239,7 +239,7 @@ fn decode_rm(w: u8, buf: &[u8]) -> Result<(Size, Arg)> {
             bail!("invalid mode encoding: {e:b}")
         }
     };
-    Ok((0, rm))
+    Ok(sz_rm)
 }
 
 // type DispLo = u8;
