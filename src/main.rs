@@ -223,8 +223,9 @@ fn decode_rm_2(buf: &[u8]) -> Result<Mem> {
     Ok(Mem { regs, displacement })
 }
 
-fn decode_rm(w: u8, buf: &[u8]) -> Result<Arg> {
+fn decode_rm(w: u8, buf: &[u8]) -> Result<(Size, Arg)> {
     let b2 = buf[0];
+    // FIXME: Ret size
     let rm = match b2 >> 6 {
         0b0000_0000 => Arg::Mem(decode_rm_0(buf)?),
         0b0000_0001 => Arg::Mem(decode_rm_1(buf)?),
@@ -234,30 +235,30 @@ fn decode_rm(w: u8, buf: &[u8]) -> Result<Arg> {
             bail!("invalid mode encoding: {e:b}")
         }
     };
-    Ok(rm)
+    Ok((0, rm))
 }
 
 // type DispLo = u8;
 // type DispHi = u8;
-fn decode_mov_rm_reg(d: u8, w: u8, buf: &[u8]) -> Result<(Instruction, Size)> {
+fn decode_mov_rm_reg(d: u8, w: u8, buf: &[u8]) -> Result<(Size, Instruction)> {
     let b2 = buf[0];
     // Always decode reg field as register.
     let reg = Arg::Reg(decode_reg(w, b2 >> 3)?);
 
     // Decode rm depends on mode.
-    let rm = decode_rm(w, buf)?;
+    let (sz, rm) = decode_rm(w, buf)?;
 
     let (src, dest) = match d {
         0 => (reg, rm),
         1 => (rm, reg),
         _ => unreachable!(),
     };
-    Ok((Instruction::Mov { src, dest }, 2))
+    Ok((2, Instruction::Mov { src, dest }))
 }
 
 type Size = usize;
 
-fn decode_instruction(buf: &[u8]) -> Result<(Instruction, Size)> {
+fn decode_instruction(buf: &[u8]) -> Result<(Size, Instruction)> {
     debug_assert!(!buf.is_empty());
 
     let b1 = buf[0];
@@ -280,7 +281,7 @@ fn decode_instructions(buf: &[u8]) -> Result<Instructions> {
     let mut offset = 0;
     while offset < buf.len() {
         let inst_buf = &buf[offset..];
-        let (instruction, size) = decode_instruction(inst_buf)?;
+        let (size, instruction) = decode_instruction(inst_buf)?;
         instructions.push(instruction);
         offset += size;
     }
