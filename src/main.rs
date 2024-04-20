@@ -170,6 +170,10 @@ fn decode_reg(w: u8, bits: u8) -> Result<Reg> {
     }
 }
 
+fn decode_reg_arg(w: u8, bits: u8) -> Result<Arg> {
+    Ok(Arg::Reg(decode_reg(w, bits)?))
+}
+
 // -------
 //   MOV
 // -------
@@ -199,7 +203,7 @@ fn decode_mem_regs(buf: &[u8]) -> Result<MemReg> {
     Ok(r)
 }
 
-fn decode_rm_0(buf: &[u8]) -> Result<Mem> {
+fn decode_rm_0(buf: &[u8]) -> Result<Arg> {
     use crate::MemReg::*;
     use crate::Reg::*;
     let regs = decode_mem_regs(buf)?;
@@ -208,29 +212,29 @@ fn decode_rm_0(buf: &[u8]) -> Result<Mem> {
         One(BP) => (decode_u16(buf[1], buf[2]), Zero),
         _ => (0, regs),
     };
-    Ok(Mem { regs, displacement })
+    Ok(Arg::Mem(Mem { regs, displacement }))
 }
 
-fn decode_rm_1(buf: &[u8]) -> Result<Mem> {
+fn decode_rm_1(buf: &[u8]) -> Result<Arg> {
     let regs = decode_mem_regs(buf)?;
     let displacement = buf[1] as u16;
-    Ok(Mem { regs, displacement })
+    Ok(Arg::Mem(Mem { regs, displacement }))
 }
 
-fn decode_rm_2(buf: &[u8]) -> Result<Mem> {
+fn decode_rm_2(buf: &[u8]) -> Result<Arg> {
     let regs = decode_mem_regs(buf)?;
     let displacement = decode_u16(buf[1], buf[2]);
-    Ok(Mem { regs, displacement })
+    Ok(Arg::Mem(Mem { regs, displacement }))
 }
 
 fn decode_rm(w: u8, buf: &[u8]) -> Result<(Size, Arg)> {
     let b2 = buf[0];
     // FIXME: Ret size
     let rm = match b2 >> 6 {
-        0b0000_0000 => Arg::Mem(decode_rm_0(buf)?),
-        0b0000_0001 => Arg::Mem(decode_rm_1(buf)?),
-        0b0000_0010 => Arg::Mem(decode_rm_2(buf)?),
-        0b0000_0011 => Arg::Reg(decode_reg(w, b2)?),
+        0b0000_0000 => decode_rm_0(buf)?,
+        0b0000_0001 => decode_rm_1(buf)?,
+        0b0000_0010 => decode_rm_2(buf)?,
+        0b0000_0011 => decode_reg_arg(w, b2)?,
         e => {
             bail!("invalid mode encoding: {e:b}")
         }
