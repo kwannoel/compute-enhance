@@ -229,7 +229,6 @@ fn decode_rm_2(buf: &[u8]) -> Result<(Size, Arg)> {
 
 fn decode_rm(w: u8, buf: &[u8]) -> Result<(Size, Arg)> {
     let b2 = buf[0];
-    // FIXME: Ret size
     let sz_rm = match b2 >> 6 {
         0b0000_0000 => decode_rm_0(buf)?,
         0b0000_0001 => decode_rm_1(buf)?,
@@ -248,16 +247,18 @@ fn decode_mov_rm_reg(d: u8, w: u8, buf: &[u8]) -> Result<(Size, Instruction)> {
     let b2 = buf[0];
     // Always decode reg field as register.
     let reg = Arg::Reg(decode_reg(w, b2 >> 3)?);
+    let reg_sz = 1;
 
     // Decode rm depends on mode.
-    let (sz, rm) = decode_rm(w, buf)?;
+    let (rm_sz, rm) = decode_rm(w, buf)?;
 
     let (src, dest) = match d {
         0 => (reg, rm),
         1 => (rm, reg),
         _ => unreachable!(),
     };
-    Ok((2, Instruction::Mov { src, dest }))
+    let sz = reg_sz + rm_sz;
+    Ok((sz, Instruction::Mov { src, dest }))
 }
 
 type Size = usize;
@@ -273,6 +274,7 @@ fn decode_instruction(buf: &[u8]) -> Result<(Size, Instruction)> {
         0b10_001001 => decode_mov_rm_reg(0, 1, buf)?,
         0b10_001010 => decode_mov_rm_reg(1, 0, buf)?,
         0b10_001011 => decode_mov_rm_reg(0, 1, buf)?,
+        // MOV imm rm
         unsupported_opcode => bail!("invalid opcode encoding: {unsupported_opcode:b}"), // Mov
     };
     Ok(instruction)
@@ -381,7 +383,7 @@ mov bp, ax"
 
     #[test]
     fn test_39_decode() {
-        let listing38 = [
+        let listing39 = [
 0b1000_1001, 0b11011110,
 0b1000_1000, 0b1100_0110,
 // 0b10110001, 0b0000_1100, 0b10110101,
@@ -393,7 +395,7 @@ mov bp, ax"
 // 00000024: 10001000 00001010 10001000 01101110 00000000           ...n.
         ];
 
-        let instructions = decode_instructions(&listing38).unwrap();
+        let instructions = decode_instructions(&listing39).unwrap();
         check_debug(
             &instructions,
             expect!["Instructions([Mov { src: Reg(BX), dest: Reg(SI) }, Mov { src: Reg(AL), dest: Reg(DH) }])"],
