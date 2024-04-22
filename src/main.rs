@@ -243,14 +243,19 @@ fn decode_rm(w: u8, buf: &[u8]) -> Result<(Size, Arg)> {
 
 // type DispLo = u8;
 // type DispHi = u8;
-fn decode_mov_rm_reg(d: u8, w: u8, buf: &[u8]) -> Result<(Size, Instruction)> {
-    let b2 = buf[0];
+fn decode_mov_rm_reg(buf: &[u8]) -> Result<(Size, Instruction)> {
+    let b1 = buf[0];
+    let b2 = buf[1];
+
+    let d = (b1 & 0b0000_0010) >> 1;
+    let w =  b1 & 0b0000_0001;
+
     // Always decode reg field as register.
     let reg = Arg::Reg(decode_reg(w, b2 >> 3)?);
     let reg_sz = 1;
 
     // Decode rm depends on mode.
-    let (rm_sz, rm) = decode_rm(w, buf)?;
+    let (rm_sz, rm) = decode_rm(w, &buf[1..])?;
 
     let (src, dest) = match d {
         0 => (reg, rm),
@@ -261,19 +266,21 @@ fn decode_mov_rm_reg(d: u8, w: u8, buf: &[u8]) -> Result<(Size, Instruction)> {
     Ok((sz, Instruction::Mov { src, dest }))
 }
 
+fn decode_imm_rm(buf: &[u8]) -> Result<(Size, Instruction)> {
+    todo!()
+}
+
 type Size = usize;
 
 fn decode_instruction(buf: &[u8]) -> Result<(Size, Instruction)> {
     debug_assert!(!buf.is_empty());
 
     let b1 = buf[0];
-    let buf = &buf[1..];
     let instruction = match b1 {
         // MOV r/m reg
-        0b10_001000..=0b10_001011 => {
-            decode_mov_rm_reg((b1 & 0b0000_0010) >> 1, b1 & 0b0000_0001, buf)?
-        }
+        0b1000_1000..=0b1000_1011 => decode_mov_rm_reg(buf)?,
         // MOV imm rm
+        0b1011_0000..=0b1011_1111 => decode_imm_rm(buf)?,
         unsupported_opcode => bail!("invalid opcode encoding: {unsupported_opcode:b}"), // Mov
     };
     Ok(instruction)
