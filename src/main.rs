@@ -250,7 +250,7 @@ fn decode_mov_rm_reg(buf: &[u8]) -> Result<(Size, Instruction)> {
     let b2 = buf[1];
 
     let d = (b1 & 0b0000_0010) >> 1;
-    let w =  b1 & 0b0000_0001;
+    let w = b1 & 0b0000_0001;
 
     // Always decode reg field as register.
     let reg = Arg::Reg(decode_reg(w, b2 >> 3)?);
@@ -273,11 +273,17 @@ fn decode_imm_rm(buf: &[u8]) -> Result<(Size, Instruction)> {
     let w = (b1 & 0b0000_1000) >> 3;
     let reg = decode_reg(w, b1)?;
     let imm = if w == 1 {
-        i16::from_le_bytes([buf[1],buf[2]])
+        i16::from_le_bytes([buf[1], buf[2]])
     } else {
         i8::from_le_bytes([buf[1]]) as i16
     };
-    Ok((w as usize + 2, Instruction::Mov { src: Arg::Imm(imm), dest: Arg::Reg(reg) }))
+    Ok((
+        w as usize + 2,
+        Instruction::Mov {
+            src: Arg::Imm(imm),
+            dest: Arg::Reg(reg),
+        },
+    ))
 }
 
 type Size = usize;
@@ -401,36 +407,16 @@ mov bp, ax"
     fn test_39_decode() {
         let listing39 = [
             // reg to reg
-            0b10001001,
-            0b11011110,
-            0b10001000,
-            0b11000110,
-
-            // imm8 to reg
-            0b10110001, 0b00001100,
-            0b10110101, 0b11110100,
-
-            // imm16 to reg
-            0b10111001, 0b00001100, 0b00000000,
-            0b10111001, 0b11110100, 0b11111111,
-            0b10111010, 0b01101100, 0b00001111,
-            0b10111010, 0b10010100, 0b11110000,
-
+            0b10001001, 0b11011110, 0b10001000, 0b11000110, // imm8 to reg
+            0b10110001, 0b00001100, 0b10110101, 0b11110100, // imm16 to reg
+            0b10111001, 0b00001100, 0b00000000, 0b10111001, 0b11110100, 0b11111111, 0b10111010,
+            0b01101100, 0b00001111, 0b10111010, 0b10010100, 0b11110000,
             // mem to reg
-            0b10001010, 0b00000000,
-            0b10001011, 0b00011011,
-            0b10001011, 0b01010110, 0b00000000,
-
+            0b10001010, 0b00000000, 0b10001011, 0b00011011, 0b10001011, 0b01010110, 0b00000000,
             // mem8 to reg
-            0b10001010, 0b01100000, 0b00000100,
-
-            // mem16 to reg
-            0b10001010, 0b10000000, 0b10000111, 0b00010011,
-
-            // Dest calc
-            0b10001001, 0b00001001,
-            0b10001000, 0b00001010,
-            0b10001000, 0b01101110, 0b00000000,
+            0b10001010, 0b01100000, 0b00000100, // mem16 to reg
+            0b10001010, 0b10000000, 0b10000111, 0b00010011, // Dest calc
+            0b10001001, 0b00001001, 0b10001000, 0b00001010, 0b10001000, 0b01101110, 0b00000000,
         ];
 
         let instructions = decode_instructions(&listing39).unwrap();
