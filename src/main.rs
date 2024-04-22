@@ -132,7 +132,7 @@ impl fmt::Display for Instructions {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let last_idx = self.0.len() - 1;
         for inst in &self.0[..last_idx] {
-            write!(f, "{inst}\n")?;
+            writeln!(f, "{inst}")?;
         }
         let last = &self.0[last_idx];
         write!(f, "{last}")?;
