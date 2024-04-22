@@ -183,8 +183,8 @@ fn decode_reg_arg(w: u8, bits: u8) -> Result<(Size, Arg)> {
 // TODO: Can we directly cast and index a u16 value?
 fn decode_u16(lo: u8, hi: u8) -> u16 {
     let mut result = 0u16;
-    result &= lo as u16;
-    result &= (hi as u16) << 8;
+    result |= lo as u16;
+    result |= (hi as u16) << 8;
     result
 }
 
@@ -420,15 +420,23 @@ mov bp, ax"
             0b10001010, 0b00000000,
             0b10001011, 0b00011011,
             0b10001011, 0b01010110, 0b00000000,
-            // 10001010 01100000 00000100  .V..`.
-            // 0000001e: 10001010 10000000 10000111 00010011 10001001 00001001  ......
-            // 00000024: 10001000 00001010 10001000 01101110 00000000           ...n.
+
+            // mem8 to reg
+            0b10001010, 0b01100000, 0b00000100,
+
+            // mem16 to reg
+            0b10001010, 0b10000000, 0b10000111, 0b00010011,
+
+            // Dest calc
+            0b10001001, 0b00001001,
+            0b10001000, 0b00001010,
+            0b10001000, 0b01101110, 0b00000000,
         ];
 
         let instructions = decode_instructions(&listing39).unwrap();
         check_debug(
             &instructions,
-            expect!["Instructions([Mov { src: Reg(BX), dest: Reg(SI) }, Mov { src: Reg(AL), dest: Reg(DH) }, Mov { src: Imm(12), dest: Reg(CL) }, Mov { src: Imm(-12), dest: Reg(CH) }, Mov { src: Imm(12), dest: Reg(CX) }, Mov { src: Imm(-12), dest: Reg(CX) }, Mov { src: Imm(3948), dest: Reg(DX) }, Mov { src: Imm(-3948), dest: Reg(DX) }, Mov { src: Mem(Mem { regs: Two((BX, SI)), displacement: 0 }), dest: Reg(AL) }, Mov { src: Mem(Mem { regs: Two((BP, DI)), displacement: 0 }), dest: Reg(BX) }, Mov { src: Mem(Mem { regs: One(BP), displacement: 0 }), dest: Reg(DX) }])"],
+            expect!["Instructions([Mov { src: Reg(BX), dest: Reg(SI) }, Mov { src: Reg(AL), dest: Reg(DH) }, Mov { src: Imm(12), dest: Reg(CL) }, Mov { src: Imm(-12), dest: Reg(CH) }, Mov { src: Imm(12), dest: Reg(CX) }, Mov { src: Imm(-12), dest: Reg(CX) }, Mov { src: Imm(3948), dest: Reg(DX) }, Mov { src: Imm(-3948), dest: Reg(DX) }, Mov { src: Mem(Mem { regs: Two((BX, SI)), displacement: 0 }), dest: Reg(AL) }, Mov { src: Mem(Mem { regs: Two((BP, DI)), displacement: 0 }), dest: Reg(BX) }, Mov { src: Mem(Mem { regs: One(BP), displacement: 0 }), dest: Reg(DX) }, Mov { src: Mem(Mem { regs: Two((BX, SI)), displacement: 4 }), dest: Reg(AH) }, Mov { src: Mem(Mem { regs: Two((BX, SI)), displacement: 4999 }), dest: Reg(AL) }, Mov { src: Reg(CX), dest: Mem(Mem { regs: Two((BX, DI)), displacement: 0 }) }, Mov { src: Reg(CL), dest: Mem(Mem { regs: Two((BP, SI)), displacement: 0 }) }, Mov { src: Reg(CH), dest: Mem(Mem { regs: One(BP), displacement: 0 }) }])"],
         );
         assert_eq!(
             instructions.to_string(),
@@ -442,7 +450,12 @@ mov dx, 3948
 mov dx, -3948
 mov al, [bx + si]
 mov bx, [bp + di]
-mov dx, [bp]"
+mov dx, [bp]
+mov ah, [bx + si + 4]
+mov al, [bx + si + 4999]
+mov [bx + di], cx
+mov [bp + si], cl
+mov [bp], ch"
         )
     }
 }
