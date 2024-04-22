@@ -39,6 +39,7 @@ pub enum Reg {
 
 #[derive(Clone, Debug)]
 pub enum Arg {
+    Imm(i16),
     Reg(Reg),
     Mem(Mem),
 }
@@ -107,6 +108,7 @@ impl fmt::Display for Arg {
         let s = match self {
             Self::Reg(r) => format!("{:?}", r).to_lowercase(),
             Self::Mem(m) => m.to_string(),
+            Self::Imm(i) => i.to_string(),
         };
         write!(f, "{s}")
     }
@@ -267,7 +269,15 @@ fn decode_mov_rm_reg(buf: &[u8]) -> Result<(Size, Instruction)> {
 }
 
 fn decode_imm_rm(buf: &[u8]) -> Result<(Size, Instruction)> {
-    todo!()
+    let b1 = buf[0];
+    let w = (b1 & 0b0000_1000) >> 3;
+    let reg = decode_reg(w, b1)?;
+    let imm = if w == 1 {
+        i16::from_le_bytes([buf[1],buf[2]])
+    } else {
+        i8::from_le_bytes([buf[1]]) as i16
+    };
+    Ok((w as usize + 2, Instruction::Mov { src: Arg::Imm(imm), dest: Arg::Reg(reg) }))
 }
 
 type Size = usize;
@@ -390,15 +400,27 @@ mov bp, ax"
     #[test]
     fn test_39_decode() {
         let listing39 = [
-            0b1000_1001,
+            // reg to reg
+            0b10001001,
             0b11011110,
-            0b1000_1000,
-            0b1100_0110,
-            // 0b10110001, 0b0000_1100, 0b10110101,
-            // 11110100 10111001 00001100 00000000 10111001  ...... //
-            // 0000000c: 11110100 11111111 10111010 01101100 00001111 10111010  ...l..
-            // 00000012: 10010100 11110000 10001010 00000000 10001011 00011011  ......
-            // 00000018: 10001011 01010110 00000000 10001010 01100000 00000100  .V..`.
+            0b10001000,
+            0b11000110,
+
+            // imm8 to reg
+            0b10110001, 0b00001100,
+            0b10110101, 0b11110100,
+
+            // imm16 to reg
+            0b10111001, 0b00001100, 0b00000000,
+            0b10111001, 0b11110100, 0b11111111,
+            0b10111010, 0b01101100, 0b00001111,
+            0b10111010, 0b10010100, 0b11110000,
+
+            // mem to reg
+            0b10001010, 0b00000000,
+            0b10001011, 0b00011011,
+            0b10001011, 0b01010110, 0b00000000,
+            // 10001010 01100000 00000100  .V..`.
             // 0000001e: 10001010 10000000 10000111 00010011 10001001 00001001  ......
             // 00000024: 10001000 00001010 10001000 01101110 00000000           ...n.
         ];
@@ -406,13 +428,21 @@ mov bp, ax"
         let instructions = decode_instructions(&listing39).unwrap();
         check_debug(
             &instructions,
-            expect!["Instructions([Mov { src: Reg(BX), dest: Reg(SI) }, Mov { src: Reg(AL), dest: Reg(DH) }])"],
+            expect!["Instructions([Mov { src: Reg(BX), dest: Reg(SI) }, Mov { src: Reg(AL), dest: Reg(DH) }, Mov { src: Imm(12), dest: Reg(CL) }, Mov { src: Imm(-12), dest: Reg(CH) }, Mov { src: Imm(12), dest: Reg(CX) }, Mov { src: Imm(-12), dest: Reg(CX) }, Mov { src: Imm(3948), dest: Reg(DX) }, Mov { src: Imm(-3948), dest: Reg(DX) }, Mov { src: Mem(Mem { regs: Two((BX, SI)), displacement: 0 }), dest: Reg(AL) }, Mov { src: Mem(Mem { regs: Two((BP, DI)), displacement: 0 }), dest: Reg(BX) }, Mov { src: Mem(Mem { regs: One(BP), displacement: 0 }), dest: Reg(DX) }])"],
         );
         assert_eq!(
             instructions.to_string(),
             "mov si, bx
-mov dh, al" // mov cl, 12
-                        // "
+mov dh, al
+mov cl, 12
+mov ch, -12
+mov cx, 12
+mov cx, -12
+mov dx, 3948
+mov dx, -3948
+mov al, [bx + si]
+mov bx, [bp + di]
+mov dx, [bp]"
         )
     }
 }
