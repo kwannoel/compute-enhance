@@ -16,6 +16,9 @@
 
 bits 16
 
+; Custom
+mov dx, [bx - 3458]
+
 ; Signed displacements
 mov ax, [bx + di - 37]
 mov [si - 300], cx

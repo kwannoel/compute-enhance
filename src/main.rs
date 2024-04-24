@@ -11,7 +11,7 @@ pub enum MemReg {
 #[derive(Clone, Debug)]
 pub struct Mem {
     regs: MemReg,
-    displacement: u16,
+    displacement: i16,
 }
 
 #[derive(Clone, Debug)]
@@ -97,7 +97,12 @@ impl fmt::Display for Mem {
         let sd = match (s.as_str(), d.as_str()) {
             ("", _) => d,
             (_, "0") => s,
-            (_, _) => format!("{s} + {d}"),
+            (_, _) => if *displacement < 0 {
+                let d = (*displacement as i32).abs();
+                format!("{s} - {d}")
+            } else {
+                format!("{s} + {d}")
+            }
         };
         write!(f, "[{sd}]")
     }
@@ -211,7 +216,7 @@ fn decode_rm_0(buf: &[u8]) -> Result<(Size, Arg)> {
     let regs = decode_mem_regs(buf)?;
     let (sz, displacement, regs) = match regs {
         // 110, DIRECT ADDRESS
-        One(BP) => (3, decode_u16(buf[1], buf[2]), Zero),
+        One(BP) => (3, i16::from_le_bytes([buf[1], buf[2]]), Zero),
         _ => (1, 0, regs),
     };
     Ok((sz, Arg::Mem(Mem { regs, displacement })))
@@ -219,13 +224,14 @@ fn decode_rm_0(buf: &[u8]) -> Result<(Size, Arg)> {
 
 fn decode_rm_1(buf: &[u8]) -> Result<(Size, Arg)> {
     let regs = decode_mem_regs(buf)?;
-    let displacement = buf[1] as u16;
+
+    let displacement = i8::from_le_bytes([buf[1]]) as i16;
     Ok((2, Arg::Mem(Mem { regs, displacement })))
 }
 
 fn decode_rm_2(buf: &[u8]) -> Result<(Size, Arg)> {
     let regs = decode_mem_regs(buf)?;
-    let displacement = decode_u16(buf[1], buf[2]);
+    let displacement = i16::from_le_bytes([buf[1], buf[2]]);
     Ok((3, Arg::Mem(Mem { regs, displacement })))
 }
 
@@ -442,6 +448,23 @@ mov al, [bx + si + 4999]
 mov [bx + di], cx
 mov [bp + si], cl
 mov [bp], ch"
+        )
+    }
+
+    #[test]
+    fn test_40_decode() {
+        let listing39 = [
+0b10001011, 0b10010111, 0b01111110, 0b11110010
+        ];
+
+        let instructions = decode_instructions(&listing39).unwrap();
+        check_debug(
+            &instructions,
+            expect!["Instructions([Mov { src: Mem(Mem { regs: One(BX), displacement: -3458 }), dest: Reg(DX) }])"],
+        );
+        assert_eq!(
+            instructions.to_string(),
+            "mov dx, [bx - 3458]"
         )
     }
 }
